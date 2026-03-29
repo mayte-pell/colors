@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kinetic Type</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #eae6df; overflow: hidden; cursor: none; }
+  canvas { display: block; position: absolute; top: 0; left: 0; }
+
+  .cursor {
+    position: fixed; width: 4px; height: 4px;
+    background: #222; border-radius: 50%;
+    pointer-events: none; z-index: 9999;
+    transform: translate(-50%, -50%);
+  }
+
+  .ui {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding: 28px 44px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    pointer-events: none; z-index: 10;
+  }
+
+  .input-wrap { pointer-events: all; display: flex; flex-direction: column; gap: 10px; }
+
+  .input-label {
+    font-family: 'Inter Tight', sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: #aaa;
+  }
+
+  #textInput {
+    background: none; border: none; border-bottom: 1px solid #cdc8c0;
+    outline: none;
+    font-family: 'HelveticaNeue-Light','Helvetica Neue Light','Helvetica Neue','Inter Tight',sans-serif;
+    font-weight: 300; font-size: 18px; color: #1a1a1a;
+    letter-spacing: 0.08em; width: 380px; padding: 6px 0;
+    text-transform: uppercase; caret-color: #1a1a1a;
+  }
+  #textInput::placeholder { color: #ccc; }
+
+  .controls-right {
+    pointer-events: all; display: flex; flex-direction: column; align-items: flex-end; gap: 11px;
+  }
+  .control-row { display: flex; align-items: center; gap: 14px; }
+  .control-row label {
+    font-family: 'Inter Tight', sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #aaa;
+  }
+  .control-row input[type=range] { width: 88px; accent-color: #1a1a1a; cursor: pointer; }
+  .control-row .val {
+    font-family: 'Inter Tight', sans-serif; font-weight: 300;
+    font-size: 10px; color: #aaa; min-width: 28px; text-align: right;
+  }
+
+  .logo {
+    position: fixed; top: 36px; left: 44px;
+    font-family: 'Inter Tight', sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: #bbb;
+  }
+
+  .hint {
+    position: fixed; top: 36px; left: 50%; transform: translateX(-50%);
+    font-family: 'Inter Tight', sans-serif; font-weight: 300;
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: #bbb; pointer-events: none; transition: opacity 1.2s; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="logo">Kinetic Type</div>
+<div class="hint" id="hint">Mové el mouse sobre las letras</div>
+
+<div class="ui">
+  <div class="input-wrap">
+    <span class="input-label">Texto</span>
+    <input id="textInput" type="text" maxlength="40" placeholder="ESCRIBÍ ALGO" value="PLAY WITH ME">
+  </div>
+  <div class="controls-right">
+    <div class="control-row">
+      <label>Tamaño fuente</label>
+      <input type="range" id="fontSize" min="40" max="220" step="2" value="130">
+      <span class="val" id="fsVal">50</span>
+    </div>
+    <div class="control-row">
+      <label>Blob</label>
+      <input type="range" id="blobSize" min="34" max="100" step="2" value="34">
+      <span class="val" id="bsVal">0</span>
+    </div>
+    <div class="control-row">
+      <label>Blur</label>
+      <input type="range" id="blurAmt" min="6" max="50" step="2" value="22">
+      <span class="val" id="blVal">36</span>
+    </div>
+    <div class="control-row">
+      <label>Rastro</label>
+      <input type="range" id="trailLen" min="5" max="80" step="1" value="40">
+      <span class="val" id="tlVal">47</span>
+    </div>
+    <div class="control-row">
+      <label>Fade out</label>
+      <input type="range" id="fadeSpd" min="1" max="15" step="1" value="3">
+      <span class="val" id="fdVal">14</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+<script>
+
+let inputText = "PLAY WITH ME";
+let fontSize  = 130;
+let blobSize  = 34;
+let blurAmt   = 22;
+let trailLen  = 40;
+let fadeSpd   = 3;
+let hueStep   = 0; // avanza con el movimiento
+
+// ─── PALETA CECIERLICH ───────────────────────────────────────
+// Copiada directamente de las referencias:
+// naranja brillante → rojo-naranja → magenta → violeta → teal oscuro
+// Son los colores exactos de las imágenes que mandaste
+const STOPS = [
+  { r: 255, g: 140, b: 20  },  // naranja brillante
+  { r: 235, g: 60,  b: 30  },  // rojo-naranja
+  { r: 200, g: 30,  b: 90  },  // magenta
+  { r: 110, g: 20,  b: 160 },  // violeta profundo
+  { r: 25,  g: 55,  b: 130 },  // azul índigo
+  { r: 10,  g: 80,  b: 80  },  // teal oscuro (los bordes de las refs)
+  { r: 15,  g: 100, b: 50  },  // verde oscuro
+  { r: 200, g: 100, b: 20  },  // naranja ocre (vuelta al warm)
+];
+
+function lerpColor(t) {
+  // t: 0 a 1 → interpola a lo largo de los stops
+  const n   = STOPS.length;
+  const pos = ((t % 1) + 1) % 1 * n;
+  const i0  = Math.floor(pos) % n;
+  const i1  = (i0 + 1) % n;
+  const f   = pos - Math.floor(pos);
+  const c0  = STOPS[i0], c1 = STOPS[i1];
+  return {
+    r: c0.r + (c1.r - c0.r) * f,
+    g: c0.g + (c1.g - c0.g) * f,
+    b: c0.b + (c1.b - c0.b) * f,
+  };
+}
+
+// UI
+const cursorEl = document.getElementById('cursor');
+const hintEl   = document.getElementById('hint');
+let hintGone   = false;
+let mx = -999, my = -999;
+
+let isDown = false;
+let justClicked = false; // true solo el primer frame de un nuevo click
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursorEl.style.left = mx + 'px'; cursorEl.style.top = my + 'px';
+});
+document.addEventListener('mousedown', e => {
+  // Solo activar si el click es sobre el canvas o el body (no sobre controles)
+  const uiEl = document.querySelector('.ui');
+  const logoEl = document.querySelector('.logo');
+  const hintElCheck = document.querySelector('.hint');
+  if (uiEl && uiEl.contains(e.target)) return;
+  if (logoEl && logoEl.contains(e.target)) return;
+  if (hintElCheck && hintElCheck.contains(e.target)) return;
+  isDown = true;
+  justClicked = true; // marca el primer frame
+  if (!hintGone) { hintGone = true; hintEl.style.opacity = '0'; }
+});
+document.addEventListener('mouseup', () => { isDown = false; });
+
+document.getElementById('textInput').oninput = e => { inputText = e.target.value.toUpperCase(); trail = []; };
+document.getElementById('fontSize').oninput  = e => { fontSize  = parseInt(e.target.value);  document.getElementById('fsVal').textContent = Math.round((fontSize-40)/(220-40)*100); trail = []; };
+document.getElementById('blobSize').oninput  = e => { blobSize  = parseInt(e.target.value);  document.getElementById('bsVal').textContent = Math.round((blobSize-34)/(100-34)*100); };
+document.getElementById('blurAmt').oninput   = e => { blurAmt   = parseInt(e.target.value);  document.getElementById('blVal').textContent  = Math.round((blurAmt-6)/(50-6)*100); };
+document.getElementById('trailLen').oninput  = e => { trailLen  = parseInt(e.target.value);  document.getElementById('tlVal').textContent  = Math.round((trailLen-5)/(80-5)*100); };
+document.getElementById('fadeSpd').oninput   = e => { fadeSpd   = parseInt(e.target.value);  document.getElementById('fdVal').textContent  = Math.round((fadeSpd-1)/(15-1)*100); };
+
+let trail = []; // [{ x, y, t, alpha }]  — t: posición en la paleta (0-1)
+
+// Box-Muller gaussian
+function randn() {
+  const u1 = Math.max(Math.random(), 1e-10);
+  const u2 = Math.random();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+new p5(function(p) {
+
+  let letterBoxes = [];
+  let prevMx = -999, prevMy = -999;
+
+  function buildLayout() {
+    const txt = inputText || "ESCRIBÍ ALGO";
+    p.textFont('"HelveticaNeue-Light","Helvetica Neue Light","Helvetica Neue","Inter Tight",sans-serif');
+    p.textSize(fontSize);
+    p.textStyle(p.NORMAL);
+    p.textAlign(p.LEFT, p.BASELINE);
+    const totalW  = p.textWidth(txt);
+    const startX  = p.width  / 2 - totalW / 2;
+    const centerY = p.height / 2 + fontSize * 0.12;
+    letterBoxes   = [];
+    let curX = startX;
+    for (let i = 0; i < txt.length; i++) {
+      const ch = txt[i], chW = p.textWidth(ch);
+      if (ch !== ' ') {
+        letterBoxes.push({
+          x: curX, cx: curX + chW / 2,
+          cy: centerY - fontSize * 0.36,
+          w: chW,
+        });
+      }
+      curX += chW;
+    }
+    return { txt, startX, centerY };
+  }
+
+  function getActiveBox() {
+    for (let box of letterBoxes) {
+      if (
+        mx > box.x - box.w * 0.1 && mx < box.x + box.w * 1.1 &&
+        my > box.cy - fontSize * 0.54 && my < box.cy + fontSize * 0.54
+      ) return box;
+    }
+    return null;
+  }
+
+  p.setup = function() {
+    p.createCanvas(window.innerWidth, window.innerHeight);
+    p.noStroke();
+  };
+
+  p.windowResized = function() {
+    p.resizeCanvas(window.innerWidth, window.innerHeight);
+    trail = [];
+  };
+
+  p.draw = function() {
+    // Fondo
+    p.background(234, 230, 223);
+
+    const { txt, startX, centerY } = buildLayout();
+
+    const dx    = mx - prevMx;
+    const dy    = my - prevMy;
+    const speed = Math.sqrt(dx * dx + dy * dy);
+    const active = getActiveBox();
+
+    // Activo si: mouse sobre letra con movimiento, O si click presionado (con o sin movimiento)
+    const movingOnLetter = active && speed > 0.3;
+    const clicking       = isDown; // click en cualquier parte, estático o en movimiento
+
+    const shouldAdd = movingOnLetter || clicking;
+
+    if (shouldAdd) {
+      // Si está quieto con click, el hue avanza solo para que el color cambie
+      const hueInc = clicking && speed < 0.3 ? 0.0003 : speed * 0.003;
+      hueStep = (hueStep + hueInc) % 1;
+      // Solo agregar punto si se movió, o si el trail está vacío (primer click)
+      const lastPt = trail[0];
+      const distFromLast = lastPt ? Math.sqrt((mx - lastPt.x)**2 + (my - lastPt.y)**2) : 999;
+      if (distFromLast > 1.5 || trail.length === 0 || justClicked) {
+        trail.unshift({ x: mx, y: my, t: hueStep, alpha: 255, fromClick: clicking && !active });
+        if (trail.length > trailLen) trail.length = trailLen;
+        justClicked = false; // consumido
+      } else if (clicking && !active && trail.length > 0) {
+        // Click acumulativo: refrescamos el punto más cercano y le sumamos un nuevo
+        // punto encima con el hue levemente desplazado → capas de color, sutil
+        const existing = trail[0];
+        existing.alpha = Math.min(255, existing.alpha + 30);
+        // Cada click adicional agrega una capa con color levemente diferente
+        hueStep = (hueStep + 0.04) % 1;
+        trail.unshift({ x: mx + (Math.random()-0.5)*6, y: my + (Math.random()-0.5)*6, t: hueStep, alpha: 180, fromClick: true });
+        if (trail.length > trailLen) trail.length = trailLen;
+      }
+    }
+    prevMx = mx; prevMy = my;
+
+    if (!shouldAdd) {
+      for (let pt of trail) pt.alpha = Math.max(0, pt.alpha - fadeSpd * 0.8);
+    }
+    trail = trail.filter(pt => pt.alpha > 1);
+
+    if (trail.length === 0) {
+      // Solo dibujamos letras
+      p.fill(25, 25, 25);
+      p.textFont('"HelveticaNeue-Light","Helvetica Neue Light","Helvetica Neue","Inter Tight",sans-serif');
+      p.textSize(fontSize);
+      p.textAlign(p.LEFT, p.BASELINE);
+      let curX = startX;
+      for (let i = 0; i < txt.length; i++) {
+        p.text(txt[i], curX, centerY);
+        curX += p.textWidth(txt[i]);
+      }
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // CAPA 1 — blob suave con blur (núcleo)
+    // ═══════════════════════════════════════════════════════
+    const ctx = p.drawingContext;
+    ctx.save();
+    ctx.filter = `blur(${blurAmt}px)`;
+
+    for (let i = trail.length - 1; i >= 0; i--) {
+      const pt  = trail[i];
+      if (pt.alpha < 2) continue;
+      const age = i / Math.max(trail.length - 1, 1);
+      const c   = lerpColor(pt.t);
+      const sz  = blobSize * (1 - age * 0.55);
+      const a   = (pt.alpha / 255) * (1 - age * 0.6);
+
+      ctx.globalAlpha = a;
+      ctx.fillStyle   = `rgb(${c.r|0},${c.g|0},${c.b|0})`;
+      ctx.beginPath();
+      ctx.ellipse(pt.x, pt.y, sz * 1.3, sz * 1.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore(); // quita el blur
+
+    // ═══════════════════════════════════════════════════════
+    // CAPA 2 — grano difuminado (distribución uniforme radial)
+    // Parte desde el centro, va perdiendo densidad hacia afuera
+    // Sin anillo — cubre todo el área del blob + halo exterior
+    // ═══════════════════════════════════════════════════════
+    for (let i = trail.length - 1; i >= 0; i--) {
+      const pt  = trail[i];
+      if (pt.alpha < 10) continue;
+      const age = i / Math.max(trail.length - 1, 1);
+
+      // Dos capas de color: centro = mismo color del blob, borde = stop desplazado
+      const cInner = lerpColor(pt.t);
+      const cOuter = lerpColor(pt.t + 0.18);
+
+      // El grano cubre desde el centro hasta mucho más lejos que el blob
+      // para crear el halo difuminado
+      const maxR = blobSize * 4.5;
+
+      // Muchas partículas muy pequeñas distribuidas radialmente
+      const count = Math.floor(280 * (1 - age * 0.7) * (pt.alpha / 255));
+
+      for (let j = 0; j < count; j++) {
+        // Distribución radial: sqrt del random para que sea uniforme en área
+        // (sin sqrt se acumularían en el centro)
+        const r     = Math.sqrt(Math.random()) * maxR;
+        const angle = Math.random() * Math.PI * 2;
+        const px    = pt.x + Math.cos(angle) * r;
+        const py    = pt.y + Math.sin(angle) * r;
+
+        // Falloff suave: 1 en el centro → 0 en el borde exterior
+        const normR   = r / maxR;
+        // Caída cuadrática → gradiente natural
+        const falloff = Math.max(0, 1 - normR * normR);
+        if (falloff < 0.02) continue;
+
+        // Interpolar color entre inner y outer según distancia
+        const blend = normR;
+        const c = {
+          r: cInner.r + (cOuter.r - cInner.r) * blend,
+          g: cInner.g + (cOuter.g - cInner.g) * blend,
+          b: cInner.b + (cOuter.b - cInner.b) * blend,
+        };
+
+        // Alpha: sutil y variable — no manchas, polvo
+        const alpha = falloff * (pt.alpha / 255) * (1 - age * 0.65) * 90 * Math.random();
+        if (alpha < 3) continue;
+
+        // Partículas mínimas — 0.5px fijo, sin variación de tamaño
+        ctx.globalAlpha = alpha / 255;
+        ctx.fillStyle   = `rgb(${c.r|0},${c.g|0},${c.b|0})`;
+        ctx.fillRect(px, py, 0.5, 0.5);
+      }
+    }
+
+    ctx.globalAlpha = 1;
+
+    // ═══════════════════════════════════════════════════════
+    // CAPA 3 — letras encima
+    // ═══════════════════════════════════════════════════════
+    p.fill(25, 25, 25);
+    p.textFont('"HelveticaNeue-Light","Helvetica Neue Light","Helvetica Neue","Inter Tight",sans-serif');
+    p.textSize(fontSize);
+    p.textAlign(p.LEFT, p.BASELINE);
+    let curX = startX;
+    for (let i = 0; i < txt.length; i++) {
+      p.text(txt[i], curX, centerY);
+      curX += p.textWidth(txt[i]);
+    }
+  };
+});
+</script>
+</body>
+</html>
